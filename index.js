@@ -21,7 +21,7 @@ function showPlaylist(playlistName) {
         };
 
         songItem.innerHTML = `
-        <img src="/api/placeholder/100/100" alt="Song" class="song-img" />
+        <img src="./testimage.png" alt="Song" class="song-img" />
         <div class="song-details">
             <div class="song-title">${playlistName} Song ${i}</div>
             <div class="song-artist">Artist ${Math.floor(Math.random() * 10) + 1}</div>
@@ -33,8 +33,48 @@ function showPlaylist(playlistName) {
     }
 }
 
+// Settings
+function settings() {
+    if (document.getElementById('settings-tab').classList.contains('active') || document.getElementById('search-tab').classList.contains('active')) {
+        goHome();
+        return;
+    }
+    settingIcon = document.getElementById('settings-icon')
+    settingIcon.innerHTML = '<title>home-circle</title><path d="M19.07,4.93C17.22,3 14.66,1.96 12,2C9.34,1.96 6.79,3 4.94,4.93C3,6.78 1.96,9.34 2,12C1.96,14.66 3,17.21 4.93,19.06C6.78,21 9.34,22.04 12,22C14.66,22.04 17.21,21 19.06,19.07C21,17.22 22.04,14.66 22,12C22.04,9.34 21,6.78 19.07,4.93M17,12V18H13.5V13H10.5V18H7V12H5L12,5L19.5,12H17Z" />'
+    document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    document.getElementById('settings-tab').classList.add('active');
+}
+
+// Search
+function  search() {
+    settingIcon = document.getElementById('settings-icon')
+    settingIcon.innerHTML = '<title>home-circle</title><path d="M19.07,4.93C17.22,3 14.66,1.96 12,2C9.34,1.96 6.79,3 4.94,4.93C3,6.78 1.96,9.34 2,12C1.96,14.66 3,17.21 4.93,19.06C6.78,21 9.34,22.04 12,22C14.66,22.04 17.21,21 19.06,19.07C21,17.22 22.04,14.66 22,12C22.04,9.34 21,6.78 19.07,4.93M17,12V18H13.5V13H10.5V18H7V12H5L12,5L19.5,12H17Z" />'
+    document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    searchBar = document.getElementById('search-bar');
+    searchBar.classList.add('active');
+    searchBar.value = '';
+
+    searchContainer = document.getElementById('search-container');
+    searchContainer.classList.add('active');
+
+    document.getElementById('search-tab').classList.add('active');
+}
+
 // Go back to home
 function goHome() {
+    settingIcon = document.getElementById('settings-icon')
+    settingIcon.innerHTML = '<title>settings</title><path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z" />'
+    searchBar = document.getElementById('search-bar');
+    searchBar.value = '';
+    searchBar.classList.remove('active');
+
+    searchContainer = document.getElementById('search-container');
+    searchContainer.classList.remove('active');
+
     document.querySelectorAll('.tab-content').forEach(tab => {
         tab.classList.remove('active');
     });
@@ -47,7 +87,6 @@ function playSong(title, artist) {
     document.getElementById('mini-artist').textContent = artist;
     document.getElementById('full-title').textContent = title;
     document.getElementById('full-artist').textContent = artist;
-    document.getElementById('mini-player').classList.remove('hidden');
 }
 
 // Show full player
