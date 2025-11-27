@@ -75,10 +75,6 @@
         <h2>Login</h2>
         <form id="loginForm">
             <div class="form-group">
-                <label for="ip">IP</label>
-                <input type="text" id="ip" name="ip" required>
-            </div>
-            <div class="form-group">
                 <label for="username">Username</label>
                 <input type="text" id="username" name="username" required>
             </div>
@@ -95,26 +91,36 @@
             event.preventDefault();
             const username = document.getElementById("username").value;
             const password = document.getElementById("password").value;
-            const ip = document.getElementById("ip").value;
-            makeRequest(ip + "/login", {
+            makeRequest("/login", {
                 "username": username,
                 "password": password,
-                "credentials": "include"
+            }).then(data => {
+                const accessToken = data["access_token"];
+                const refreshToken = data["refresh_token"];
+                // store the tokens in local storage
+                localStorage.setItem("access_token", accessToken);
+                localStorage.setItem("refresh_token", refreshToken);
+                // redirect to home page but include the tokens in the header
+                window.location.href = "/";
+            }).catch((error) => {
+                console.error("Error during login:", error);
+                alert("Login failed. Please check your credentials and try again.");
             });
+
         });
 
         async function makeRequest(url, parameters) {
             // Build the query string
             const query = new URLSearchParams(parameters).toString();
             const fullUrl = `${url}?${query}`;
-
-            try {
-                window.location.href = fullUrl;
-                const response = await fetch(fullUrl);
-            } catch (error) {
-                console.error("Fetch error:", error);
-                throw error;
+            const response = await fetch(fullUrl, {
+                method: 'GET',
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
             }
+            const data = await response.json(); // or response.text(), etc.
+            return data;
         }
     </script>
 </body>

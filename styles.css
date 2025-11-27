@@ -1,3 +1,13 @@
+:root {
+  --primary-bg: #000;
+  --accent-color: #F5A9B8;
+  --accent-color-two: #5BCEFA;
+  --text-primary: #ffffff;
+  --text-muted: #535353;
+  --border-color: rgba(255, 255, 255, 0.1);
+  --hover-bg: #444;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -6,7 +16,7 @@
 }
 
 body {
-  background-color: #363636;
+  background-color: #000;
   color: #ffffff;
 }
 
@@ -29,6 +39,7 @@ body {
 /* Playlist Grid Container */
 .playlist-grid {
   display: grid;
+  padding-top: 16px;
   grid-template-columns: repeat(auto-fill, 120px);
   gap: 16px;
   width: 100%;
@@ -144,7 +155,7 @@ body {
   height: 8%;
 }
 
-.mini-player-holder{
+.mini-player-holder {
   display: flex;
   align-items: center;
   max-width: 80%;
@@ -209,6 +220,9 @@ body {
 
 /* Full player */
 .full-player {
+  display: flex;
+  justify-content: center;
+  align-items: center;
   position: fixed;
   top: 0;
   left: 0;
@@ -250,7 +264,7 @@ body {
   font-weight: 600;
 }
 
-.swipe-area{
+.swipe-area {
   width: 100%;
   height: 60%;
   background-color: rgba(0, 0, 0, 0);
@@ -261,8 +275,8 @@ body {
 }
 
 .cover-art-container {
-  width: 100%;
-  height: 100%;
+  width: 300px;
+  height: fit-content;
   display: flex;
   justify-content: center;
   flex-direction: column;
@@ -270,7 +284,7 @@ body {
   max-width: 500px;
   aspect-ratio: 1;
   max-height: fit-content;
-  margin: 10% 0 20%;
+  margin: 5% 0 5%;
   z-index: -2;
 }
 
@@ -290,7 +304,7 @@ body {
   align-items: center;
   justify-content: center;
   text-align: center;
-  margin-bottom: 10%;
+  margin-bottom: 5%;
 }
 
 .current-title {
@@ -317,7 +331,8 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 30px;
+  margin-bottom: 20px;
+  margin-top: 20px;
   max-width: 100%;
   max-height: 10%;
 }
@@ -332,7 +347,7 @@ body {
   align-items: center;
   aspect-ratio: 1;
   max-width: 50px;
-  width: 8%;
+  width: 15%;
   cursor: pointer;
   fill: white;
 }
@@ -347,14 +362,10 @@ body {
   align-items: center;
   aspect-ratio: 1;
   max-width: 100px;
-  width: 20%;
+  width: 25%;
   cursor: pointer;
   fill: white;
   z-index: 10;
-}
-
-.progress-container {
-  margin-bottom: 8px;
 }
 
 .progress-bar {
@@ -381,7 +392,6 @@ body {
 .actions {
   display: flex;
   justify-content: space-around;
-  margin-bottom: 30px;
 }
 
 .action-btn {
@@ -393,10 +403,11 @@ body {
   flex-direction: column;
   align-items: center;
   aspect-ratio: 1;
-  max-width: 100px;
-  width: 8%;
+  max-width: 75px;
+  width: 18%;
   cursor: pointer;
   fill: white;
+  margin-bottom: 10px;
 }
 
 .action-text {
@@ -430,13 +441,13 @@ body {
   display: block;
 }
 
-.page-header{
+.page-header {
   z-index: 10;
 }
 
 
 
-.settings-btn{
+.settings-btn {
   margin-top: 23px;
   margin-left: 2%;
   margin-right: 2%;
@@ -465,7 +476,7 @@ body {
   border-radius: 20px;
   overflow-x: auto;
   scroll-behavior: smooth;
-  border: none; 
+  border: none;
   color: white;
   box-shadow: none;
   outline: none;
@@ -473,7 +484,7 @@ body {
   font-size: 1rem;
 }
 
-.page-header{
+.page-header {
   width: 100%;
   position: fixed;
   display: flex;
@@ -488,6 +499,7 @@ body {
   grid-template-columns: 1fr 1fr;
   gap: 0px;
 }
+
 .imageGrid img {
   width: 100%;
   height: auto;
@@ -541,7 +553,6 @@ body {
   gap: 16px;
   padding-bottom: 8px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  margin-bottom: 8px;
 }
 
 .popup-song-details h3 {
@@ -597,19 +608,21 @@ body {
   object-fit: cover;
   border-radius: 8px;
 }
+
 .album-cover-container {
   display: flex;
   justify-content: center;
   align-items: center;
   margin-bottom: 16px;
 }
+
 .album-date {
   font-size: 16px;
   color: #b3b3b3;
   margin-top: 4px;
 }
 
-.playlist-name-input{
+.playlist-name-input {
   width: 100%;
   padding: 10px;
   border-radius: 4px;
@@ -619,19 +632,19 @@ body {
   font-size: 16px;
 }
 
-.popup-playlist-content-main{
+.popup-playlist-content-main {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.popup-playlist-content{
+.popup-playlist-content {
   display: flex;
   flex-direction: row;
   gap: 16px;
 }
 
-.create-playlist-btn{
+.create-playlist-btn {
   background-color: #1DB954;
   color: white;
   border: none;
@@ -653,7 +666,7 @@ body {
 }
 
 
-.playlist-item{
+.playlist-item {
   display: flex;
   align-items: center;
 }
@@ -679,9 +692,47 @@ body {
 }
 
 .playlist-checkbox svg {
-  display: none;  /* Hide SVG by default */
+  display: none;
+  /* Hide SVG by default */
 }
 
 .playlist-checkbox.checked svg {
-  display: block; /* Show SVG when checked */
+  display: block;
+  /* Show SVG when checked */
+}
+
+
+audio {
+  display: none;
+}
+
+.range {
+  /* appearance: none; */
+  cursor: pointer;
+  margin-left: 16px;
+  margin-right: 16px;
+  width: -webkit-fill-available;
+  accent-color: var(--accent-color-two);
+  width: 100%;
+}
+
+.range::-webkit-slider-runnable-track {
+  appearance: none;
+  height: 6px;
+  width: 100%;
+}
+
+.range::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-block-start: -5px;
+}
+
+.range-wrapper {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
