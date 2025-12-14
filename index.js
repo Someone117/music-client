@@ -1,6 +1,6 @@
 // todo: virtual scrolling so it does not lag to hell
 
-var url = "https://100.79.93.20:8080";
+var url = window.location.origin;
 
 var userPlaylists = new Map();
 var currentlyPlaying = null;
@@ -9,6 +9,33 @@ var currentPlaylistId = -1;
 var playlistSongIndex = -1;
 var queue = [];
 let queueIndex = 0;
+
+
+var tracksToRemove = 50;
+var maxTracks = 1000;
+let trackMap = new Map();
+
+function addToTrackMap(track) {
+    if (trackMap.has(track.id)) return;
+
+    trackMap.set(track.id, track);
+
+    const excess = trackMap.size - maxTracks;
+    if (excess <= 0) return;
+
+    // Remove at least `tracksToRemove` items when cleaning up,
+    // but if we've exceeded by more than that, remove the excess too.
+    const toRemove = Math.min(trackMap.size, Math.max(tracksToRemove, excess));
+    for (let i = 0; i < toRemove; i++) {
+        const oldestKey = trackMap.keys().next().value;
+        if (oldestKey === undefined) break;
+        trackMap.delete(oldestKey);
+    }
+}
+
+function getFromTrackMap(trackId) {
+    return trackMap.get(trackId);
+}
 
 
 const audio1 = document.getElementById('audio1');
@@ -107,6 +134,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const createPlaylistButton = document.getElementById("create-playlist-btn");
 
     createPlaylistButton.addEventListener("click", async function () {
+        const playlistInput = document.getElementById("playlist-name-input");
         const playlistName = playlistInput.value.trim();
         if (!playlistName || playlistName.length > 50) return;
 
@@ -167,6 +195,7 @@ class Track {
     constructor(id, title, album, isDownloaded, image, smallimage, albumName, albumID, artistsIDs, artistsNames) {
         this.id = id;
         this.title = title;
+        this.album = album;
         this.isDownloaded = isDownloaded;
         this.image = image;
         this.smallimage = smallimage;
@@ -177,6 +206,7 @@ class Track {
     }
 }
 
+// ...existing code...
 class Playlist {
     constructor(id, title, username, tracks, flags) {
         this.id = id;
@@ -200,52 +230,43 @@ async function makeRequest(newurl, parameters, method = 'GET') {
     const fullUrl = `${newurl}?${query}`;
 
     try {
-        const response = await fetch(fullUrl, {
-            method: method,
-            headers: {
-                'Authorization': `Bearer ${accessToken}`
-            }
-        });
-        if (response.status === 401) {
-            // Token might be expired, try to refresh
-            let new_response = await fetch(url + "/refreshToken", {
-                method: 'POST',
+        for (let attempt = 0; attempt < 2; attempt++) {
+            const response = await fetch(fullUrl, {
+                method: method,
                 headers: {
-                    'Authorization': `Bearer ${refreshToken}`
+                    'Authorization': `Bearer ${accessToken}`
                 }
             });
-            if (!new_response.status == 401) {
-                window.location.href = "/loginPage";
-            } else {
-                const new_data = await new_response.json();
-                accessToken = new_data.access_token;
-                refreshToken = new_data.refresh_token;
-                localStorage.setItem("access_token", accessToken);
-                localStorage.setItem("refresh_token", refreshToken);
-                // Retry the request
-                let response3 = await fetch(fullUrl, {
-                    method: method,
+            if (response.status === 401 && attempt === 0) {
+                // Token might be expired, try to refresh
+                const refreshResponse = await fetch(url + "/refreshToken", {
+                    method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${accessToken}`
+                        'Authorization': `Bearer ${refreshToken}`
                     }
                 });
-                if (response3.status === 401) {
+                if (refreshResponse.ok) {
+                    const new_data = await refreshResponse.json();
+                    accessToken = new_data.access_token;
+                    refreshToken = new_data.refresh_token;
+                    localStorage.setItem("access_token", accessToken);
+                    localStorage.setItem("refresh_token", refreshToken);
+                    continue; // Retry the original request
+                } else {
+                    // go to login page
                     window.location.href = "/loginPage";
                 }
+            } else {
                 if (!response.ok) {
                     throw new Error(`HTTP error! Status: ${response.status}`);
                 }
-                const data = await response3.json(); // or response.text(), etc.
+                const data = await response.json(); // or response.text(), etc.
                 return data;
             }
         }
-        if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-        const data = await response.json(); // or response.text(), etc.
-        return data;
+        throw new Error("Failed to make request after token refresh");
     } catch (error) {
-        console.error("Fetch error:", error);
+        console.trace("Fetch error:", error);
         throw error;
     }
 }
@@ -323,20 +344,71 @@ async function getTracks(trackIds, download = false) {
     if (trackIds == null || trackIds == undefined || trackIds == "") {
         return [];
     }
-    const parameters = {
-        "ids": trackIds,
-        "download": "" + download
-    };
+    let parameters = {};
+    let lengthToGet = 0;
+    let trackWeHave = [];
+    if (!download) {
+        let tracksToGet = [];
+        let length = 0;
+        if (typeof trackIds === 'string') {
+            length = 1;
+            trackIds = [trackIds];
+        } else {
+            length = trackIds.length;
+            if (length === 0) {
+                return [];
+            }
+        }
+        for (let i = 0; i < length; i++) {
+            let cachedTrack = getFromTrackMap(trackIds[i]);
+            if (cachedTrack) {
+                if (length === 1) {
+                    return cachedTrack;
+                }
+            } else {
+                tracksToGet.push(trackIds[i]);
+            }
+        }
+        if (tracksToGet.length === 0) {
+            if (trackWeHave.length === 1) {
+                return trackWeHave[0];
+            } else {
+                return trackWeHave;
+            }
+        }
+        parameters = {
+            "ids": tracksToGet.join(","),
+            "download": "" + false
+        };
+        lengthToGet = tracksToGet.length;
+    } else {
+        parameters = {
+            "ids": trackIds,
+            "download": "" + true
+        };
+        lengthToGet = trackIds.split(",").length;
+    }
+    if (lengthToGet === 0) {
+        return null;
+    }
+
 
     const data = await makeRequest(url + "/getTracks", parameters);
     let item = data["tracks"];
-    if (item.length == 0) {
+    if (item.length === 0) {
         return null;
-    } else if (item.length == 1) {
+    } else if (item.length === 1) {
         item = item[0];
-        return new Track(item["ID"], item["Title"], item["Album"], item["IsDownloaded"], item["Image"], item["SmallImage"], item["AlbumName"], item["AlbumID"], item["ArtistsIDs"], item["ArtistsNames"]);
+        let track = new Track(item["ID"], item["Title"], item["Album"], item["IsDownloaded"], item["Image"], item["SmallImage"], item["AlbumName"], item["AlbumID"], item["ArtistsIDs"], item["ArtistsNames"]);
+        addToTrackMap(track);
+        return track;
+    } else {
+        let newItems = item.map(t => new Track(t["ID"], t["Title"], t["Album"], t["IsDownloaded"], t["Image"], t["SmallImage"], t["AlbumName"], t["AlbumID"], t["ArtistsIDs"], t["ArtistsNames"]));
+        for (const track of newItems) {
+            addToTrackMap(track);
+        }
+        return [...trackWeHave, ...newItems];
     }
-    return item.map(t => new Track(t["ID"], t["Title"], t["Album"], t["IsDownloaded"], t["Image"], t["SmallImage"], t["AlbumName"], t["AlbumID"], t["ArtistsIDs"], t["ArtistsNames"]));
 }
 
 async function getPlaylistImage(playlistId) {
@@ -350,8 +422,7 @@ async function getPlaylistImage(playlistId) {
         img.onclick = () => showPlaylist(playlistId);
         return img;
     }
-    let playlistTracks = playlist.tracks; // Comma-separated list of track IDs
-    if (playlistTracks === null || playlistTracks === undefined) {
+    if (playlist.tracks === null || playlist.tracks === undefined) {
         let img = document.createElement("img");
         img.src = "./static/testimage.png";
         img.alt = "Song image";
@@ -359,9 +430,9 @@ async function getPlaylistImage(playlistId) {
         img.onclick = () => showPlaylist(playlistId);
         return img;
     }
-    let tracksList = playlistTracks.split(",");
-    if (tracksList.length > 4) {
-        tracksList = tracksList.slice(0, 4);
+    let tracksList = playlist.tracks;
+    if (playlist.tracks.length > 4) {
+        tracksList = playlist.tracks.slice(0, 4);
     } else if (tracksList.length === 0) {
         let img = document.createElement("img");
         img.src = "./static/testimage.png";
@@ -409,7 +480,7 @@ async function getPlaylistImage(playlistId) {
             let track = await getTracks(trackId);
             if (track != null) {
                 let img = document.createElement("img");
-                img.src = track.smallimage; // match your Track constructor property name
+                img.src = track.smallimage;
                 img.alt = "Track image";
                 container.appendChild(img);
             }
@@ -825,7 +896,7 @@ async function fillPlaylistPage(playlist) {
     publicInternal = flagsList[3] == "1";
     if (version == "001") {
         // make request to get all the artists
-        getTracks(playlist.tracks).then(async function (tracks) {
+        getTracks(playlist.tracks.join(",")).then(async function (tracks) {
             if (tracks instanceof Array) {
                 for (const track of tracks) {
                     container.appendChild(await makeItemCard(track, playlist.id, false));
@@ -869,7 +940,7 @@ function setCurrentlyPlaying(item) { // actually do it in the server
     // set the currently playing track
     currentlyPlaying = item;
     // set tab title to song title - artist names
-    document.title = item.title + " - " + item.artistsNames.join(", ");
+    document.title = item.title;
     // set icon to album art
     let link = document.querySelector("link[rel~='icon']");
     if (!link) {
@@ -1188,6 +1259,7 @@ async function goToArtist(artistId) {
 }
 
 function addToPlaylist(trackId, type = "track") {
+    const playlistOverlay = document.getElementById("playlistOverlay");
     playlistOverlay.classList.add('active');
     // remove the previous overlay
     popupOverlay.classList.remove('active');
@@ -1198,6 +1270,7 @@ function addToPlaylist(trackId, type = "track") {
     playlistContainer.innerHTML = ""; // clear the container
     playlistContainer.setAttribute("data-track-id", trackId);
     playlistContainer.setAttribute("data-type", type);
+
 
     // get playlists
     getPlaylists().then(async function () {
@@ -1242,13 +1315,13 @@ function addToPlaylist(trackId, type = "track") {
                     if (type === "artist") {
                         // add all tracks from artist to playlist
                         getArtistAlbums(trackId).then(function (albums) {
-                            albums.forEach(function (album) {
+                            for (const album of albums) {
                                 getAlbumTracks(album.id).then(async function (tracks) {
                                     for (const track of tracks) {
                                         addTrackToPlaylist(value.id, track.id);
                                     }
                                 });
-                            });
+                            }
                         });
                     } else if (type === "album") {
                         // add all tracks from album to playlist
@@ -1285,19 +1358,31 @@ function addToPlaylist(trackId, type = "track") {
 }
 
 function addTrackToPlaylist(playlistId, trackId) {
-    parameters = {
+    const parameters = {
         "playlistID": playlistId,
         "trackIDs": trackId
     };
     makeRequest(url + "/addTrack", parameters, 'POST')
         .then(function () {
             let playlist = userPlaylists.get(playlistId)
-            playlist.tracks += "," + playlistId
+            // Ensure playlist.tracks is an array
+            if (!Array.isArray(playlist.tracks)) {
+                playlist.tracks = [];
+            }
+
+            // support adding multiple comma-separated IDs
+            const idsToAdd = String(trackId).split(',').map(id => id.trim()).filter(id => id !== '');
+
+            // Add ids if not already present
+            for (const id of idsToAdd) {
+                if (!playlist.tracks.includes(id)) {
+                    playlist.tracks.push(id);
+                }
+            }
             userPlaylists.set(playlistId, playlist)
         });
-
-    console.log(`Adding track ${trackId} to playlist ${playlistId}`);
 }
+
 
 function createPlaylist(playlistName) {
     parameters = {
@@ -1379,6 +1464,7 @@ function createPlaylist(playlistName) {
             alert("Error creating playlist: " + data["message"]);
         }
     });
+    const playlistInput = document.getElementById("playlist-name-input");
     playlistInput.value = ""; // clear the input field
 
 }
@@ -1416,7 +1502,7 @@ async function makeRequestForAudio(url, parameters, method = 'GET') {
         }
         return response.blob(); // convert the response to a Blob
     } catch (error) {
-        console.error("Fetch error:", error);
+        console.trace("Fetch error:", error);
         throw error;
     }
 }
@@ -1428,10 +1514,9 @@ function loadAudio(trackId, audioElement) {
     }).then(blob => {
         const audioURL = URL.createObjectURL(blob); // create a blob URL
         audioElement.src = audioURL; // set the audio element's source to the blob URL
-    })
-        .catch(err => {
-            console.error("Failed to load audio:", err);
-        });
+    }).catch(err => {
+        console.error("Failed to load audio:", err);
+    });
 }
 
 function shuffleArray(array) {
@@ -1580,17 +1665,16 @@ function playPlaylist(playlistId = null, itemToPlay = null, shuffle = false) {
     if (playlist == null) {
         return;
     }
-    let trackIds = playlist.tracks.split(",");
-    if (trackIds.length == 0) {
+    if (playlist.tracks.length == 0) {
         return;
     }
 
     currentPlaylistId = playlistId;
 
-    queue = trackIds;
+    queue = playlist.tracks.slice();
 
     if (itemToPlay != null) {
-        queueIndex = trackIds.indexOf(itemToPlay.id);
+        queueIndex = queue.indexOf(itemToPlay.id);
     } else {
         queueIndex = 0;
     }
@@ -1704,21 +1788,20 @@ function playSongInPlaylist(playlistId, trackId) {
     if (playlist == null) {
         return;
     }
-    let trackIds = playlist.tracks.split(",");
-    if (trackIds.length == 0) {
+    if (playlist.tracks.length == 0) {
         return;
     }
 
     currentPlaylistId = playlistId;
 
 
-    if (trackIds != null) {
-        queueIndex = trackIds.indexOf(trackId);
+    if (trackId != null) {
+        queueIndex = playlist.tracks.indexOf(trackId);
     } else {
         queueIndex = 0;
     }
 
-    queue = trackIds.slice(queueIndex, trackIds.length).concat(trackIds.slice(0, queueIndex));
+    queue = playlist.tracks.slice(queueIndex, playlist.tracks.length).concat(playlist.tracks.slice(0, queueIndex));
 
     playSongInQueue(trackId);
 }
@@ -1790,7 +1873,7 @@ function setCurrentlyPlayingInDevice(track) {
     if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
             title: track.title,
-            artist: track.artistsNames,
+            artist: track.artistsNames.join(", "),
             artwork: [
                 { src: track.smallimage || './static/testimage.png', sizes: '96x96', type: 'image/png' },
                 { src: track.image || './static/testimage.png', sizes: '128x128', type: 'image/png' },
