@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Authentication Successful</title>
+</head>
+<body>
+    <h1>Authentication Successful!</h1>
+    <p>Redirecting you back to the app...</p>
+    
+    <script>
+        // Store tokens in localStorage
+        localStorage.setItem("access_token", "{{.access_token}}");
+        localStorage.setItem("refresh_token", "{{.refresh_token}}");
+        
+        // Redirect to home page
+        setTimeout(() => {
+            window.location.href = "/";
+        }, 1000);
+    </script>
+</body>
+</html>

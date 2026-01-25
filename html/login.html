@@ -89,26 +89,32 @@
     <script>
         document.getElementById("loginForm").addEventListener("submit", function (event) {
             event.preventDefault();
+
             const username = document.getElementById("username").value;
             const password = document.getElementById("password").value;
+
             makeRequest("/login", {
                 "username": username,
                 "password": password,
             }).then(data => {
+                // Check if OAuth authorization is required
+                if (data.requires_auth) {
+                    // Redirect the browser to Spotify OAuth
+                    window.location.href = data.auth_url;
+                    return;
+                }
+
+                // User already authorized - store tokens
                 const accessToken = data["access_token"];
                 const refreshToken = data["refresh_token"];
-                // store the tokens in local storage
                 localStorage.setItem("access_token", accessToken);
                 localStorage.setItem("refresh_token", refreshToken);
-                // redirect to home page but include the tokens in the header
                 window.location.href = "/";
             }).catch((error) => {
                 console.error("Error during login:", error);
                 alert("Login failed. Please check your credentials and try again.");
             });
-
         });
-
         async function makeRequest(url, parameters) {
             // Build the query string
             const query = new URLSearchParams(parameters).toString();

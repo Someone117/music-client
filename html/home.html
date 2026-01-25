@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <title>Music Player</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="static/styles.css">
+  <link rel="stylesheet" href="static/src/styles.css">
 </head>
 
 <body>
@@ -110,7 +110,7 @@
         <button onclick="goHome()"
           style="background: none; border: none; color: white; font-size: 1.5rem; margin-right: 10px;">←</button>
         <div class="album-cover-container">
-          <img src="./static/testimage.png" alt="Album Cover" class="album-cover" id="album-image" />
+          <img src="./static/res/testimage.png" alt="Album Cover" class="album-cover" id="album-image" />
         </div>
         <h1 id="album-title">Album</h1>
         <div id="album-subtitle" class="album-date"></div>
@@ -136,7 +136,7 @@
         <button onclick="goHome()"
           style="background: none; border: none; color: white; font-size: 1.5rem; margin-right: 10px;">←</button>
         <div class="album-cover-container">
-          <img src="./static/testimage.png" alt="Artist Image" class="album-cover" id="artist-image" />
+          <img src="./static/res/testimage.png" alt="Artist Image" class="album-cover" id="artist-image" />
         </div>
         <h1 id="artist-name">Artist</h1>
         <div class="playlist-actions" style="display: flex; gap: 16px; margin-bottom: 24px;">
@@ -179,7 +179,13 @@
                 d="M14.83,13.41L13.42,14.82L16.55,17.95L14.5,20H20V14.5L17.96,16.54L14.83,13.41M14.5,4L16.54,6.04L4,18.59L5.41,20L17.96,7.46L20,9.5V4M10.59,9.17L5.41,4L4,5.41L9.17,10.58L10.59,9.17Z" />
             </svg>
           </button>
-
+          <button class="control-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+            fill="white" width="100%" height="100%" id="download-playlist">
+              <title>download</title>
+              <path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z" />
+            </svg>
+          </button>
           <button class="control-btn">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" width="100%" height="100%"
               onclick="publicPlaylist()" id="playlist-public-button">
@@ -188,6 +194,7 @@
                 d="M22,5.27L20.5,6.75C21.46,8.28 22,10.07 22,12A10,10 0 0,1 12,22C10.08,22 8.28,21.46 6.75,20.5L5.27,22L4,20.72L20.72,4L22,5.27M17.9,17.39C19.2,15.97 20,14.08 20,12C20,10.63 19.66,9.34 19.05,8.22L14.83,12.44C14.94,12.6 15,12.79 15,13V16H16C16.89,16 17.64,16.59 17.9,17.39M11,19.93V18C10.5,18 10.07,17.83 9.73,17.54L8.22,19.05C9.07,19.5 10,19.8 11,19.93M15,4.59V5A2,2 0 0,1 13,7H11V9A1,1 0 0,1 10,10H8V12H10.18L8.09,14.09L4.21,10.21C4.08,10.78 4,11.38 4,12C4,13.74 4.56,15.36 5.5,16.67L4.08,18.1C2.77,16.41 2,14.3 2,12A10,10 0 0,1 12,2C14.3,2 16.41,2.77 18.1,4.08L16.67,5.5C16.16,5.14 15.6,4.83 15,4.59Z" />
             </svg>
           </button>
+
         </div>
 
         <div class="songs-list" id="playlist-songs">
@@ -200,7 +207,7 @@
       <!-- Mini Player -->
       <div class="mini-player" id="mini-player" onclick="showFullPlayer()">
         <div class="mini-player-holder">
-          <img src="./static/testimage.png" alt="Song" class="mini-player-image" id="mini-img" />
+          <img src="./static/res/testimage.png" alt="Song" class="mini-player-image" id="mini-img" />
           <div class="mini-player-details">
             <div class="mini-player-title" id="mini-title">Song Title That is really really long and idk why its this
               long but it is</div>
@@ -231,7 +238,7 @@
         </div>
 
         <div class="cover-art-container">
-          <img src="./static/testimage.png" alt="Album Cover" class="cover-art" id="full-img" />
+          <img src="./static/res/testimage.png" alt="Album Cover" class="cover-art" id="full-img" />
         </div>
         <div class="song-info">
           <div class="current-title" id="full-title">Song Title That Is Super Long And IDK Why it is this long</div>
@@ -250,7 +257,7 @@
                 d="M5,9V21H1V9H5M9,21A2,2 0 0,1 7,19V9C7,8.45 7.22,7.95 7.59,7.59L14.17,1L15.23,2.06C15.5,2.33 15.67,2.7 15.67,3.11L15.64,3.43L14.69,8H21C22.11,8 23,8.9 23,10V12C23,12.26 22.95,12.5 22.86,12.73L19.84,19.78C19.54,20.5 18.83,21 18,21H9M9,19H18.03L21,12V10H12.21L13.34,4.68L9,9.03V19Z" />
             </svg>
           </button>
-          <button class="action-btn">
+          <button class="action-btn" id="download-playing">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" width="100%" height="100%">
               <title>download</title>
               <path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z" />
@@ -333,20 +340,8 @@
         </div>
       </div>
 
-
-      <!-- Audio Elements -->
-      <audio id="audio1">
-        Your browser does not support the audio element.
-      </audio>
-      <audio id="audio2">
-        Your browser does not support the audio element.
-      </audio>
-      <audio id="audio3">
-        Your browser does not support the audio element.
-      </audio>
-
-
 </body>
-<script type="text/javascript" src="static/index.js" defer></script>
+<script type="text/javascript" src="./static/res/dist/jszip.min.js"></script>
+<script type="text/javascript" src="static/build/main.js" defer></script>
 
 </html>

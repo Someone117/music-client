@@ -1,0 +1,11 @@
+{
+    "compilerOptions": {
+        "outDir": "build/",
+        "lib": [
+            "DOM",
+            "DOM.Iterable",
+            "ESNext"
+        ],
+        "target": "es2016"
+    }
+}
