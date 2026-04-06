@@ -40,7 +40,21 @@
       </div>
 
       <!-- Search Tab -->
-      <div id="search-tab" class="tab-content"></div>
+      <div id="search-tab" class="tab-content">
+        <!-- make a selector to search for songs, artists, albums, or playlists
+        -->
+        <div class="search-type-selector">
+          <button class="search-type-btn active" data-type="track" onclick="changeSearchType('track')">Songs</button>
+          <button class="search-type-btn" data-type="artist" onclick="changeSearchType('artist')">Artists</button>
+          <button class="search-type-btn" data-type="album" onclick="changeSearchType('album')">Albums</button>
+          <button class="search-type-btn" data-type="playlist"
+            onclick="changeSearchType('playlist')">Playlists</button>
+        </div>
+        <div class="search-results" id="search-results">
+          <!-- Filled with TS -->
+        </div>
+
+      </div>
 
       <!-- Settings Tab -->
       <div id="settings-tab" class="tab-content">
@@ -75,11 +89,8 @@
             <button class="popup-button" id="popup-button-artist">
               <i>🎤</i> Go to artist
             </button>
-            <button class="popup-button" id="popup-button-share-spotify">
-              <i>🎵</i> Share Spotify
-            </button>
-            <button class="popup-button" id="popup-button-share-youtube">
-              <i>▶️</i> Share YouTube Music
+            <button class="popup-button" id="popup-button-share">
+              <i>🎵</i> Share
             </button>
           </div>
         </div>
@@ -180,8 +191,8 @@
             </svg>
           </button>
           <button class="control-btn">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-            fill="white" width="100%" height="100%" id="download-playlist">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" width="100%" height="100%"
+              id="download-playlist">
               <title>download</title>
               <path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z" />
             </svg>

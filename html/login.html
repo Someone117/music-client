@@ -92,23 +92,21 @@
 
             const username = document.getElementById("username").value;
             const password = document.getElementById("password").value;
-
+            let accessToken = localStorage.getItem("access_token")
+            let refreshToken = localStorage.getItem("refresh_token")
+            let userID = localStorage.getItem("user_id")
+            
             makeRequest("/login", {
                 "username": username,
                 "password": password,
+                "user_id": userID || ""
             }).then(data => {
-                // Check if OAuth authorization is required
-                if (data.requires_auth) {
-                    // Redirect the browser to Spotify OAuth
-                    window.location.href = data.auth_url;
-                    return;
-                }
-
-                // User already authorized - store tokens
                 const accessToken = data["access_token"];
                 const refreshToken = data["refresh_token"];
+                const userID = data["user_id"];
                 localStorage.setItem("access_token", accessToken);
                 localStorage.setItem("refresh_token", refreshToken);
+                localStorage.setItem("user_id", userID);
                 window.location.href = "/";
             }).catch((error) => {
                 console.error("Error during login:", error);
