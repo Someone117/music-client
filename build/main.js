@@ -149,14 +149,14 @@ document.addEventListener('DOMContentLoaded', function () {
             // one track, given an index to download
             const downloadTrack = (track) => __awaiter(this, void 0, void 0, function* () {
                 try {
-                    const blob = yield makeRequestForAudio(url + "/play", {
-                        "id": track.ID,
-                        "download": true,
-                    });
-                    if (!blob)
-                        return;
-                    const filename = track.Title.replace(/[^\w\d\-_.]/g, "_") + "-" + track.ID.toString().replace(/[^\w\d\-_.]/g, "_");
-                    zip.file(`${filename}.opus`, blob);
+                    // TODO: do this
+                    // const blob = await makeRequestForAudio(url + "/play", {
+                    //     "id": track.ID,
+                    //     "download": true,
+                    // });
+                    // if (!blob) return;
+                    // const filename = track.Title.replace(/[^\w\d\-_.]/g, "_") + "-" + track.ID.toString().replace(/[^\w\d\-_.]/g, "_");
+                    // zip.file(`${filename}.opus`, blob);
                 }
                 catch (err) {
                     console.error(`Failed to download audio for ${track.Title}:`, err);
@@ -193,54 +193,50 @@ function getArtist(artist_id) {
         return data.artists;
     });
 }
+let isRefreshing = false;
+let refreshPromise = null;
 function makeRequest(newurl_1, parameters_1) {
     return __awaiter(this, arguments, void 0, function* (newurl, parameters, method = 'GET') {
-        // Build the query string
-        const query = new URLSearchParams(parameters).toString();
-        const fullUrl = `${newurl}?${query}`;
-        try {
-            for (let attempt = 0; attempt < 2; attempt++) {
-                const response = yield fetch(fullUrl, {
-                    method: method,
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`
-                    }
-                });
-                if (response.status === 401 && attempt === 0) {
-                    // Token might be expired, try to refresh
-                    const refreshResponse = yield fetch(url + "/refreshToken", {
+        const execute = () => fetch(`${newurl}?${new URLSearchParams(parameters)}`, {
+            method,
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        let response = yield execute();
+        if (response.status === 401) {
+            // wait for the refresh
+            if (!isRefreshing) {
+                isRefreshing = true;
+                refreshPromise = (() => __awaiter(this, void 0, void 0, function* () {
+                    const res = yield fetch(url + "/refreshToken", {
                         method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${refreshToken}`
-                        }
+                        headers: { 'Authorization': `Bearer ${refreshToken}` }
                     });
-                    if (refreshResponse.ok) {
-                        const new_data = yield refreshResponse.json();
-                        accessToken = new_data["access_token"];
-                        refreshToken = new_data["refresh_token"];
+                    if (res.ok) {
+                        const data = yield res.json();
+                        accessToken = data.access_token;
+                        refreshToken = data.refresh_token;
                         localStorage.setItem("access_token", accessToken);
                         localStorage.setItem("refresh_token", refreshToken);
-                        continue; // Retry the original request
+                        isRefreshing = false;
+                        return true;
                     }
-                    else {
-                        // go to login page
-                        window.location.href = "/loginPage";
-                    }
-                }
-                else {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! Status: ${response.status}`);
-                    }
-                    const data = yield response.json();
-                    return data;
-                }
+                    isRefreshing = false;
+                    return false;
+                }))();
             }
-            throw new Error("Failed to make request after token refresh");
+            const success = yield refreshPromise;
+            if (success) {
+                // retry the original request with the new token
+                response = yield execute();
+            }
+            else {
+                window.location.href = "/loginPage";
+                throw new Error("Session expired");
+            }
         }
-        catch (error) {
-            console.trace("Fetch error:", error);
-            throw error;
-        }
+        if (!response.ok)
+            throw new Error("Request failed");
+        return yield response.json();
     });
 }
 function getPlaylists() {
@@ -413,7 +409,7 @@ function getPlaylistImage(playlistId) {
 }
 function makeItemCard(item_1) {
     return __awaiter(this, arguments, void 0, function* (item, playlistId = null, showType = true, isqueue = false, isalbum = false) {
-        if ('IsDownloaded' in item) { // track
+        if ('MediaMetadata' in item) { // track
             let top = document.createElement("div");
             top.classList.add("song-item", "track-item");
             top.setAttribute("data-id", item.ID.toString());
@@ -1216,55 +1212,18 @@ function createPlaylist(playlistName) {
         playlistInput.value = ""; // clear the input field
     });
 }
-function preloadSongs(trackIds) {
-    // Preload the audio track
-    if (trackIds == null || trackIds.length === 0) {
-        return;
-    }
-    try {
-        makeRequest(url + "/loadTracks", new URLSearchParams({
-            "id": trackIds.join(","),
-        }));
-    }
-    catch (_a) {
-        // This won't catch async errors from makeRequest
-        return;
-    }
-}
-function makeRequestForAudio(url_1, parameters_1) {
-    return __awaiter(this, arguments, void 0, function* (url, parameters, method = 'GET') {
-        // Build the query string
-        const query = new URLSearchParams(parameters).toString();
-        const fullUrl = `${url}?${query}`;
-        const token = localStorage.getItem("access_token");
-        try {
-            const response = yield fetch(fullUrl, {
-                method: method,
-                headers: {
-                    "Authorization": `Bearer ${token}`
-                }
-            });
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-            return response.blob(); // convert the response to a Blob
-        }
-        catch (error) {
-            console.trace("Fetch error:", error);
-            throw error;
-        }
-    });
+function getURLForAudio(url, id) {
+    // Build the query string
+    const paramsWithToken = { "id": id.toString(), token: localStorage.getItem("access_token") };
+    const query = new URLSearchParams(paramsWithToken).toString();
+    return `${url}?${query}`;
 }
 function loadAudio(trackId, audioElement) {
-    makeRequestForAudio(url + "/play", {
-        "id": trackId,
-        "download": true,
-    }).then(blob => {
-        const audioURL = URL.createObjectURL(blob); // create a blob URL
-        audioElement.src = audioURL; // set the audio element's source to the blob URL
-    }).catch(err => {
-        console.error("Failed to load audio:", err);
-    });
+    const audioURL = getURLForAudio(url + "/play", trackId);
+    audioElement.src = audioURL; // set the audio element's source to the URL
+}
+function preloadAudio(trackId) {
+    makeRequest(url + "/preload", new URLSearchParams({ "id": trackId.toString() }), 'POST');
 }
 function shuffleArray(array) {
     let currentIndex = array.length;
@@ -1401,15 +1360,9 @@ function playQueue() {
         return;
     }
     let trackId = queue[queueIndex];
-    // preload 4 next songs
-    if (queueIndex + 4 >= queue.length) {
-        if (queueIndex + 1 < queue.length) {
-            preloadSongs(queue.slice(queueIndex + 1, queue.length));
-        }
-    }
-    else {
-        preloadSongs(queue.slice(queueIndex + 1, queueIndex + 4));
-    }
+    // preload next 2 songs:
+    preloadAudio(queue[queueIndex + 1 >= queue.length ? 0 : queueIndex + 1]);
+    preloadAudio(queue[queueIndex + 2 >= queue.length ? (queueIndex + 2) % queue.length : queueIndex + 2]);
     playSong(trackId);
 }
 function formatTime(seconds) {
@@ -1585,7 +1538,7 @@ const updateDuration = function () {
     playerSeekRange.max = Math.ceil(currentAudio.duration).toString();
     playerDuration.textContent = getTimecode(Number(playerSeekRange.max));
 };
-const playerRunningTime = document.querySelector("[data-running-time");
+const playerRunningTime = document.querySelector("[data-running-time]");
 const updateRunningTime = function () {
     playerSeekRange.valueAsNumber = currentAudio.currentTime;
     playerRunningTime.textContent = getTimecode(currentAudio.currentTime);
