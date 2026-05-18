@@ -12,11 +12,12 @@ let url = window.location.origin;
 let userPlaylists = new Map();
 var currentlyPlaying = null;
 var currentTrack = null;
-var currentPlaylistId = "-1";
+var currentPlaylistId = -1;
 var playlistSongIndex = -1;
 var queue = [];
 let queueIndex = 0;
 var testImage = "static/res/testimage.png";
+let searchType = "track";
 var tracksToRemove = 50;
 var maxTracks = 1000;
 let trackMap = new Map();
@@ -58,10 +59,13 @@ let playlistPublic = false;
 const popupOverlay = document.getElementById('popupOverlay');
 var accessToken = null;
 var refreshToken = null;
+var userID = null;
+var searched = false;
 var searchBar;
 document.addEventListener('DOMContentLoaded', function () {
     accessToken = localStorage.getItem("access_token");
     refreshToken = localStorage.getItem("refresh_token");
+    userID = localStorage.getItem("user_id");
     searchBar = document.getElementById('search-bar');
     // Close popup when clicking outside the popup container
     popupOverlay.addEventListener('click', (e) => {
@@ -91,22 +95,31 @@ document.addEventListener('DOMContentLoaded', function () {
     searchBar.addEventListener("keydown", function (event) {
         if (event.key === "Enter") {
             event.preventDefault();
-            let searchTab = document.getElementById("search-tab");
-            searchTab.innerHTML = "";
-            searchDB(false, false);
+            let searchResults = document.getElementById("search-results");
+            searchResults.innerHTML = "";
+            if (!searched) {
+                searched = true;
+                searchDB();
+            }
+        }
+        else {
+            searched = false;
         }
     });
     searchBar.addEventListener("focus", function () {
         search();
     });
     searchBar.addEventListener("input", function () {
-        // if after 1000 ms there is no input, do the search
+        // if after 500 ms there is no input, do the search
         clearTimeout(searchTimer);
         searchTimer = setTimeout(() => {
-            let searchTab = document.getElementById("search-tab");
-            searchTab.innerHTML = "";
-            searchDB(false, false);
-        }, 1000);
+            let searchResults = document.getElementById("search-results");
+            searchResults.innerHTML = "";
+            if (!searched) {
+                searched = true;
+                searchDB();
+            }
+        }, 500);
     });
     const playlistInput = document.getElementById("playlist-name-input");
     playlistInput.value = "";
@@ -125,7 +138,7 @@ document.addEventListener('DOMContentLoaded', function () {
             let playlistId = document.getElementById("playlist-tab").getAttribute("data-id");
             if (!playlistId)
                 return;
-            let playlist = userPlaylists.get(playlistId);
+            let playlist = userPlaylists.get(parseInt(playlistId));
             if (!playlist)
                 return;
             let tracks = yield getTracks(playlist.Tracks, false);
@@ -136,14 +149,14 @@ document.addEventListener('DOMContentLoaded', function () {
             // one track, given an index to download
             const downloadTrack = (track) => __awaiter(this, void 0, void 0, function* () {
                 try {
-                    const blob = yield makeRequestForAudio(url + "/play", {
-                        "id": track.ID,
-                        "download": true,
-                    });
-                    if (!blob)
-                        return;
-                    const filename = track.Title.replace(/[^\w\d\-_.]/g, "_") + "-" + track.ID.replace(/[^\w\d\-_.]/g, "_");
-                    zip.file(`${filename}.mp3`, blob);
+                    // TODO: do this
+                    // const blob = await makeRequestForAudio(url + "/play", {
+                    //     "id": track.ID,
+                    //     "download": true,
+                    // });
+                    // if (!blob) return;
+                    // const filename = track.Title.replace(/[^\w\d\-_.]/g, "_") + "-" + track.ID.toString().replace(/[^\w\d\-_.]/g, "_");
+                    // zip.file(`${filename}.opus`, blob);
                 }
                 catch (err) {
                     console.error(`Failed to download audio for ${track.Title}:`, err);
@@ -170,64 +183,60 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 function getArtist(artist_id) {
     return __awaiter(this, void 0, void 0, function* () {
-        if (artist_id == null || artist_id == undefined || artist_id == "" || artist_id == "-1") {
+        if (artist_id == null || artist_id == undefined || artist_id == 0 || artist_id == -1) {
             return null;
         }
         const parameters = new URLSearchParams({
-            'ids': artist_id
+            'ids': artist_id.toString()
         });
         const data = yield makeRequest(url + "/getArtists", parameters);
         return data.artists;
     });
 }
+let isRefreshing = false;
+let refreshPromise = null;
 function makeRequest(newurl_1, parameters_1) {
     return __awaiter(this, arguments, void 0, function* (newurl, parameters, method = 'GET') {
-        // Build the query string
-        const query = new URLSearchParams(parameters).toString();
-        const fullUrl = `${newurl}?${query}`;
-        try {
-            for (let attempt = 0; attempt < 2; attempt++) {
-                const response = yield fetch(fullUrl, {
-                    method: method,
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`
-                    }
-                });
-                if (response.status === 401 && attempt === 0) {
-                    // Token might be expired, try to refresh
-                    const refreshResponse = yield fetch(url + "/refreshToken", {
+        const execute = () => fetch(`${newurl}?${new URLSearchParams(parameters)}`, {
+            method,
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        let response = yield execute();
+        if (response.status === 401) {
+            // wait for the refresh
+            if (!isRefreshing) {
+                isRefreshing = true;
+                refreshPromise = (() => __awaiter(this, void 0, void 0, function* () {
+                    const res = yield fetch(url + "/refreshToken", {
                         method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${refreshToken}`
-                        }
+                        headers: { 'Authorization': `Bearer ${refreshToken}` }
                     });
-                    if (refreshResponse.ok) {
-                        const new_data = yield refreshResponse.json();
-                        accessToken = new_data["access_token"];
-                        refreshToken = new_data["refresh_token"];
+                    if (res.ok) {
+                        const data = yield res.json();
+                        accessToken = data.access_token;
+                        refreshToken = data.refresh_token;
                         localStorage.setItem("access_token", accessToken);
                         localStorage.setItem("refresh_token", refreshToken);
-                        continue; // Retry the original request
+                        isRefreshing = false;
+                        return true;
                     }
-                    else {
-                        // go to login page
-                        window.location.href = "/loginPage";
-                    }
-                }
-                else {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! Status: ${response.status}`);
-                    }
-                    const data = yield response.json();
-                    return data;
-                }
+                    isRefreshing = false;
+                    return false;
+                }))();
             }
-            throw new Error("Failed to make request after token refresh");
+            const success = yield refreshPromise;
+            if (success) {
+                // retry the original request with the new token
+                response = yield execute();
+            }
+            else {
+                window.location.href = "/loginPage";
+                throw new Error("Session expired");
+            }
         }
-        catch (error) {
-            console.trace("Fetch error:", error);
-            throw error;
-        }
+        if (!response.ok)
+            throw new Error("Request failed");
+        return yield response.json();
     });
 }
 function getPlaylists() {
@@ -247,16 +256,16 @@ function getPlaylists() {
 function getArtistAlbums(artistId) {
     return __awaiter(this, void 0, void 0, function* () {
         const parameters = new URLSearchParams({
-            "id": artistId
+            "id": artistId.toString()
         });
         const data = yield makeRequest(url + "/getArtistAlbums", parameters);
         return data.albums;
     });
 }
-function getAlbumTracks(album) {
+function getAlbumTracks(albumId) {
     return __awaiter(this, void 0, void 0, function* () {
         const parameters = new URLSearchParams({
-            "id": album
+            "id": albumId.toString()
         });
         const data = yield makeRequest(url + "/getAlbumTracks", parameters);
         return data.tracks;
@@ -264,11 +273,11 @@ function getAlbumTracks(album) {
 }
 function getAlbum(albumId) {
     return __awaiter(this, void 0, void 0, function* () {
-        if (albumId == null || albumId == undefined || albumId == "" || albumId == "-1") {
+        if (albumId == null || albumId == undefined || albumId == 0 || albumId == -1) {
             return null;
         }
         let parameters = new URLSearchParams({
-            "ids": albumId,
+            "ids": albumId.toString(),
         });
         let data = yield makeRequest(url + "/getAlbums", parameters);
         return data.albums;
@@ -314,6 +323,12 @@ function getTracks(trackIds_1) {
         return [...trackWeHave, ...data.tracks];
     });
 }
+const getImageURL = (uuid, size = '320x320') => {
+    if (!uuid || uuid.trim() === "") {
+        return testImage;
+    }
+    return `https://resources.tidal.com/images/${uuid.split('-').join('/')}/${size}.jpg`;
+};
 function getPlaylistImage(playlistId) {
     return __awaiter(this, void 0, void 0, function* () {
         // Get first 4 tracks and make a collage
@@ -348,7 +363,7 @@ function getPlaylistImage(playlistId) {
         }
         else {
             // Use the first image
-            if (tracksList[0] == "" || tracksList[0] == "-1") {
+            if (tracksList[0] == 0 || tracksList[0] == -1) {
                 // use no image
                 let img = document.createElement("img");
                 img.src = testImage;
@@ -361,7 +376,7 @@ function getPlaylistImage(playlistId) {
             let track = yield getTracks([tracksList[0]])[0];
             if (track != null) {
                 let img = document.createElement("img");
-                img.src = track.SmallImage;
+                img.src = track.SmallImage || testImage;
                 img.alt = "Song image";
                 img.classList.add("song-img");
                 img.onclick = () => showPlaylist(playlistId);
@@ -384,7 +399,7 @@ function getPlaylistImage(playlistId) {
         for (let i = 0; i < tracks.length; i++) {
             if (tracks[i] != null) {
                 let img = document.createElement("img");
-                img.src = tracks[i].SmallImage;
+                img.src = getImageURL(tracks[i].Image, "160x160") || testImage;
                 img.alt = "Track image";
                 container.appendChild(img);
             }
@@ -394,12 +409,12 @@ function getPlaylistImage(playlistId) {
 }
 function makeItemCard(item_1) {
     return __awaiter(this, arguments, void 0, function* (item, playlistId = null, showType = true, isqueue = false, isalbum = false) {
-        if ('IsDownloaded' in item) { // track
+        if ('MediaMetadata' in item) { // track
             let top = document.createElement("div");
             top.classList.add("song-item", "track-item");
-            top.setAttribute("data-id", item.ID);
+            top.setAttribute("data-id", item.ID.toString());
             let image = document.createElement("img");
-            image.src = item.SmallImage || testImage;
+            image.src = getImageURL(item.Image, "160x160") || testImage;
             image.alt = "Song image";
             image.classList.add("song-img");
             if (isqueue) {
@@ -435,12 +450,12 @@ function makeItemCard(item_1) {
             top.appendChild(options);
             return top;
         }
-        else if ('ReleaseDate' in item) { // tlbum
+        else if ('ReleaseDate' in item) { // album
             let top = document.createElement("div");
             top.classList.add("song-item", "album-item");
-            top.setAttribute("data-id", item.ID);
+            top.setAttribute("data-id", item.ID.toString());
             let image = document.createElement("img");
-            image.src = item.SmallImage || testImage;
+            image.src = getImageURL(item.Image, "160x160") || testImage;
             image.alt = "Album image";
             image.classList.add("song-img");
             image.onclick = () => goToAlbum(item.ID);
@@ -471,14 +486,9 @@ function makeItemCard(item_1) {
         else if ('LastUpdated' in item) { // artist
             let top = document.createElement("div");
             top.classList.add("song-item", "artist-item");
-            top.setAttribute("data-id", item.ID);
+            top.setAttribute("data-id", item.ID.toString());
             let image = document.createElement("img");
-            if (item.Image && item.Image.trim() !== "") {
-                image.src = item.Image;
-            }
-            else {
-                image.src = item.SmallImage || testImage;
-            }
+            image.src = getImageURL(item.Image, "160x160") || testImage;
             image.alt = "Artist image";
             image.classList.add("song-img");
             image.onclick = () => goToArtist(item.ID);
@@ -508,7 +518,7 @@ function makeItemCard(item_1) {
             image.onclick = () => showPlaylist(item.ID);
             let top = document.createElement("div");
             top.classList.add("song-item", "playlist-item");
-            top.setAttribute("data-id", item.ID);
+            top.setAttribute("data-id", item.ID.toString());
             let title = document.createElement("div");
             title.classList = "song-title";
             title.innerHTML = item.Title;
@@ -542,7 +552,7 @@ function showPlaylist(playlistId) {
         const playlistName = playlist.Title;
         document.getElementById('playlist-tab').classList.add('active');
         document.getElementById('playlist-name').textContent = playlistName;
-        document.getElementById('playlist-tab').setAttribute('data-id', playlistId);
+        document.getElementById('playlist-tab').setAttribute('data-id', playlistId.toString());
         fillPlaylistPage(playlist);
     });
 }
@@ -560,8 +570,8 @@ function search() {
         document.querySelectorAll('.tab-content').forEach(tab => {
             tab.classList.remove('active');
         });
-        let searchTab = document.getElementById('search-tab');
-        searchTab.innerHTML = "";
+        let searchResults = document.getElementById('search-results');
+        searchResults.innerHTML = "";
         document.getElementById('search-tab').classList.add('active');
     });
 }
@@ -653,10 +663,26 @@ function hideNextSongs() {
         nextSongsElement.style.display = 'none';
     }, 300);
 }
+function changeSearchType(type) {
+    let searchResults = document.getElementById("search-results");
+    if (searchType === type) {
+        return;
+    }
+    searchResults.innerHTML = "";
+    searchType = type;
+    // make the selected type button active and the others not active
+    document.querySelectorAll('.search-type-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    document.querySelector(`[data-type="${type}"]`).classList.add('active');
+    if (searchBar.value.trim() !== "") {
+        searchDB();
+    }
+}
 function searchDB() {
-    return __awaiter(this, arguments, void 0, function* (onlydb = false, onlySpotify = false) {
+    return __awaiter(this, void 0, void 0, function* () {
         // check the scrolling of the search area, if we need to scroll more, load more
-        let searchTab = document.getElementById("search-tab");
+        let searchResults = document.getElementById("search-results");
         // get query from document
         let query = document.getElementById("search-bar").value;
         if (query == "") {
@@ -665,47 +691,28 @@ function searchDB() {
         let parameters = new URLSearchParams({
             "query": query,
             "db": "true",
-            "spotify": "true",
-            "albums": "true",
-            "artists": "true",
-            "tracks": "true",
-            "playlists": "true",
+            "external": "true",
+            "type": searchType,
         });
         let data = yield makeRequest(url + "/search", parameters);
-        let index = 0;
-        if (data.tracks) {
-            for (const item of data.tracks) {
-                searchTab.appendChild(yield makeItemCard(item));
+        if (data.result.responseType == "track") {
+            for (const item of data.result.tracks) {
+                searchResults.appendChild(yield makeItemCard(item, null, false, false, false));
             }
         }
-        if (data.artists) {
-            for (const item of data.artists) {
-                searchTab.appendChild(yield makeItemCard(item));
+        if (data.result.responseType == "artist") {
+            for (const item of data.result.artists) {
+                searchResults.appendChild(yield makeItemCard(item, null, false, false, false));
             }
         }
-        if (data.albums) {
-            for (const item of data.albums) {
-                searchTab.appendChild(yield makeItemCard(item));
+        if (data.result.responseType == "album") {
+            for (const item of data.result.albums) {
+                searchResults.appendChild(yield makeItemCard(item, null, false, false, false));
             }
         }
-        if (data.playlists) {
-            for (const item of data.playlists) {
-                searchTab.appendChild(yield makeItemCard(item));
-            }
-        }
-        if (data.spotify_tracks) {
-            for (const item of data.spotify_tracks) {
-                searchTab.appendChild(yield makeItemCard(item));
-            }
-        }
-        if (data.spotify_artists) {
-            for (const item of data.spotify_artists) {
-                searchTab.appendChild(yield makeItemCard(item));
-            }
-        }
-        if (data.spotify_albums) {
-            for (const item of data.spotify_albums) {
-                searchTab.appendChild(yield makeItemCard(item));
+        if (data.result.responseType == "playlist") {
+            for (const item of data.result.playlists) {
+                searchResults.appendChild(yield makeItemCard(item, null, false, false, false));
             }
         }
     });
@@ -784,14 +791,14 @@ function setCurrentlyPlaying(item) {
     // get the artists of the album
     // set in mini player
     let miniImage = document.getElementById("mini-img");
-    miniImage.src = item.Image || testImage;
+    miniImage.src = getImageURL(item.Image, "160x160") || testImage;
     let miniTitle = document.getElementById("mini-title");
     miniTitle.innerHTML = item.Title;
     let miniArtist = document.getElementById("mini-artist");
     miniArtist.innerHTML = item.ArtistsNames.join(", ");
     // big player
     let bigImage = document.getElementById("full-img");
-    bigImage.src = item.Image;
+    bigImage.src = getImageURL(item.Image, "640x640") || testImage;
     let bigTitle = document.getElementById("full-title");
     bigTitle.innerHTML = item.Title;
     let bigArtist = document.getElementById("full-artist");
@@ -807,7 +814,7 @@ function songOptions(track) {
         let top = document.createElement("div");
         top.classList.add("song-item", "track-item");
         let image = document.createElement("img");
-        image.src = track.SmallImage || testImage;
+        image.src = getImageURL(track.Image, "160x160") || testImage;
         image.alt = "Song image";
         image.classList.add("song-img");
         let title = document.createElement("div");
@@ -844,19 +851,31 @@ function songOptions(track) {
             popupOverlay.classList.remove('active');
         };
         addToQueueBtn.classList.remove("disabled");
-        let shareSpotifyButton = document.getElementById("popup-button-share-spotify");
-        shareSpotifyButton.onclick = () => shareSpotify(track.ID);
-        shareSpotifyButton.classList.remove("disabled");
-        let shareYtButton = document.getElementById("popup-button-link");
-        // shareYtButton.onclick = () => shareYT(track.ID);
-        shareYtButton.classList.remove("disabled");
+        let shareButton = document.getElementById("popup-button-share");
+        shareButton.onclick = () => share(track);
+        shareButton.classList.remove("disabled");
     });
 }
-function shareYT(trackId) {
-    alert("NOT IMPLEMENTED YET"); // ToDo: implement
-}
-function shareSpotify(trackId) {
-    alert("NOT IMPLEMENTED YET"); // ToDo: implement
+function share(track) {
+    // copy the track name, artist and album to clipboard
+    let text = `${track.Title} by ${track.ArtistsNames.join(", ")} from ${track.AlbumName}`;
+    navigator.clipboard.writeText(text);
+    // close popup
+    popupOverlay.classList.remove('active');
+    // make a little toast
+    let toast = document.createElement("div");
+    toast.classList.add("toast");
+    toast.textContent = "Track info copied to clipboard!";
+    document.body.appendChild(toast);
+    setTimeout(() => {
+        toast.classList.add("show");
+    }, 100);
+    setTimeout(() => {
+        toast.classList.remove("show");
+        setTimeout(() => {
+            document.body.removeChild(toast);
+        }, 300);
+    }, 3000);
 }
 function albumOptions(album) {
     let items = document.getElementsByClassName("popup-button");
@@ -870,7 +889,7 @@ function albumOptions(album) {
     let top = document.createElement("div");
     top.classList.add("song-item", "track-item");
     let image = document.createElement("img");
-    image.src = album.SmallImage || testImage;
+    image.src = getImageURL(album.Image, "160x160") || testImage;
     image.alt = "Song image";
     image.classList.add("song-img");
     let title = document.createElement("div");
@@ -908,7 +927,7 @@ function artistOptions(artist) {
     let top = document.createElement("div");
     top.classList.add("song-item", "track-item");
     let image = document.createElement("img");
-    image.src = artist.Image || testImage;
+    image.src = getImageURL(artist.Image, "160x160") || testImage;
     image.alt = "Song image";
     image.classList.add("song-img");
     let title = document.createElement("div");
@@ -937,14 +956,14 @@ function goToAlbum(albumId) {
                 searchTab.classList.remove('active');
                 popupOverlay.classList.remove('active');
                 let albumTab = document.getElementById("album-tab");
-                albumTab.setAttribute("data-id", albumId);
+                albumTab.setAttribute("data-id", albumId.toString());
                 albumTab.classList.add('active');
                 let albumTitle = document.getElementById("album-title");
                 albumTitle.innerHTML = album[0].Title;
                 let albumSubtitle = document.getElementById("album-subtitle");
                 albumSubtitle.innerHTML = parseReleaseDate(album[0].ReleaseDate);
                 let albumImage = document.getElementById("album-image");
-                albumImage.src = album[0].Image;
+                albumImage.src = getImageURL(album[0].Image, "640x640") || testImage;
                 // get all tracks and make track cards
                 let albumTracksContainer = document.getElementById("album-songs");
                 albumTracksContainer.innerHTML = "";
@@ -952,70 +971,33 @@ function goToAlbum(albumId) {
                     let trackCard = yield makeItemCard(track, albumId, false, false, true);
                     albumTracksContainer.appendChild(trackCard);
                 }
+                // parse the date and put it in the subtitle
+                console.log(album[0]);
+                albumSubtitle.innerHTML = parseReleaseDate(album[0].ReleaseDate);
             });
         });
     });
 }
 function parseReleaseDate(releaseDate) {
     // turn releaseDate into a string
-    let strreleaseDate = releaseDate.toString();
-    let year = strreleaseDate.substring(0, 4);
-    if (year == "0000") {
-        return "Unknown";
+    if (releaseDate == 0 || releaseDate == -1) {
+        return "Unknown Release Date";
     }
-    let month = strreleaseDate.substring(4, 6);
-    if (month == "00") {
-        return `${year}`;
+    // this is unix time, so we need to convert it to a date in the US date format
+    let date = new Date(releaseDate * 1000);
+    let strreleaseDate = date.toISOString().substring(0, 10).replace(/-/g, "");
+    if (strreleaseDate.length == 8) {
+        return `${strreleaseDate.substring(4, 6)}/${strreleaseDate.substring(6, 8)}/${strreleaseDate.substring(0, 4)}`;
     }
-    switch (month) {
-        case "01":
-            month = "Jan";
-            break;
-        case "02":
-            month = "Feb";
-            break;
-        case "03":
-            month = "Mar";
-            break;
-        case "04":
-            month = "Apr";
-            break;
-        case "05":
-            month = "May";
-            break;
-        case "06":
-            month = "Jun";
-            break;
-        case "07":
-            month = "Jul";
-            break;
-        case "08":
-            month = "Aug";
-            break;
-        case "09":
-            month = "Sep";
-            break;
-        case "10":
-            month = "Oct";
-            break;
-        case "11":
-            month = "Nov";
-            break;
-        case "12":
-            month = "Dec";
-            break;
-        default:
-            month = "Unknown";
-            break;
+    else if (strreleaseDate.length == 6) {
+        return `${strreleaseDate.substring(4, 6)}/${strreleaseDate.substring(0, 4)}`;
     }
-    let day = strreleaseDate.substring(6, 8);
-    if (day.charAt(0) == "0") {
-        day = day.substring(1);
+    else if (strreleaseDate.length == 4) {
+        return strreleaseDate;
     }
-    if (day == "0") {
-        return `${month} ${year}`;
+    else {
+        return "Unknown Release Date";
     }
-    return `${month} ${day} ${year}`;
 }
 function goToArtist(artistId) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -1030,13 +1012,13 @@ function goToArtist(artistId) {
                 searchContainer.classList.remove('active');
                 popupOverlay.classList.remove('active');
                 let artistTab = document.getElementById("artist-tab");
-                artistTab.setAttribute("data-id", artistId);
+                artistTab.setAttribute("data-id", artistId.toString());
                 artistTab.classList.add('active');
                 let artistName = document.getElementById("artist-name");
                 artistName.innerHTML = artist[0].Name;
                 let artistImageDiv = document.getElementById("artist-image");
-                artistImageDiv.src = artist[0].Image || artist[0].SmallImage || testImage;
-                artistTab.setAttribute("data-id", artistId);
+                artistImageDiv.src = getImageURL(artist[0].Image, "640x640") || testImage;
+                artistTab.setAttribute("data-id", artistId.toString());
                 // get all tracks and make track cards
                 let artistAlbumsContainer = document.getElementById("artist-albums");
                 artistAlbumsContainer.innerHTML = "";
@@ -1066,7 +1048,7 @@ function addToPlaylist(trackId, type = "track") {
     playlistInput.value = "";
     const playlistContainer = document.getElementById("playlist-container");
     playlistContainer.innerHTML = ""; // clear the container
-    playlistContainer.setAttribute("data-track-id", trackId);
+    playlistContainer.setAttribute("data-track-id", trackId.toString());
     playlistContainer.setAttribute("data-type", type);
     // get playlists
     getPlaylists().then(function () {
@@ -1101,30 +1083,28 @@ function addToPlaylist(trackId, type = "track") {
                         if (type === "artist") {
                             // add all tracks from artist to playlist
                             getArtistAlbums(trackId).then(function (albums) {
+                                let IdsToAdd = [];
                                 for (const album of albums) {
                                     getAlbumTracks(album.ID).then(function (tracks) {
                                         return __awaiter(this, void 0, void 0, function* () {
-                                            for (const track of tracks) {
-                                                addTrackToPlaylist(value.ID, track.ID);
-                                            }
+                                            IdsToAdd.push(...tracks.map(track => track.ID));
                                         });
                                     });
                                 }
+                                addTrackToPlaylist(value.ID, IdsToAdd);
                             });
                         }
                         else if (type === "album") {
                             // add all tracks from album to playlist
                             getAlbumTracks(trackId).then(function (tracks) {
                                 return __awaiter(this, void 0, void 0, function* () {
-                                    for (const track of tracks) {
-                                        addTrackToPlaylist(value.ID, track.ID);
-                                    }
+                                    addTrackToPlaylist(value.ID, tracks.map(track => track.ID));
                                 });
                             });
                         }
                         else {
                             // add single track to playlist
-                            addTrackToPlaylist(value.ID, trackId);
+                            addTrackToPlaylist(value.ID, [trackId]);
                         }
                     }
                     else {
@@ -1139,16 +1119,16 @@ function addToPlaylist(trackId, type = "track") {
                 top.appendChild(image);
                 top.appendChild(details);
                 top.appendChild(checkbox);
-                top.setAttribute("data-id", value.ID);
+                top.setAttribute("data-id", value.ID.toString());
                 playlistContainer.appendChild(top);
             }
         });
     });
 }
-function addTrackToPlaylist(playlistId, trackId) {
+function addTrackToPlaylist(playlistId, trackIds) {
     const parameters = new URLSearchParams({
-        "playlistID": playlistId,
-        "trackIDs": trackId
+        "playlistID": playlistId.toString(),
+        "trackIDs": trackIds.join(','),
     });
     makeRequest(url + "/addTrack", parameters, 'POST')
         .then(function () {
@@ -1157,10 +1137,8 @@ function addTrackToPlaylist(playlistId, trackId) {
         if (!Array.isArray(playlist.Tracks)) {
             playlist.Tracks = [];
         }
-        // support adding multiple comma-separated IDs
-        const idsToAdd = String(trackId).split(',').map(id => id.trim()).filter(id => id !== '');
         // Add ids if not already present
-        for (const id of idsToAdd) {
+        for (const id of trackIds) {
             if (!playlist.Tracks.includes(id)) {
                 playlist.Tracks.push(id);
             }
@@ -1177,7 +1155,7 @@ function createPlaylist(playlistName) {
             if (data["Error"] == null) {
                 let playlistId = data["playlistID"];
                 const playlistContainer = document.getElementById("playlist-container");
-                let trackId = playlistContainer.getAttribute("data-track-id");
+                let trackId = parseInt(playlistContainer.getAttribute("data-track-id"));
                 getPlaylists().then(function () {
                     return __awaiter(this, void 0, void 0, function* () {
                         const value = userPlaylists.get(playlistId);
@@ -1207,7 +1185,7 @@ function createPlaylist(playlistName) {
                         checkbox.addEventListener("click", () => {
                             checkbox.classList.toggle("checked");
                             if (checkbox.classList.contains("checked")) {
-                                addTrackToPlaylist(value.ID, trackId);
+                                addTrackToPlaylist(value.ID, [trackId]);
                             }
                             else {
                                 // remove track from playlist
@@ -1221,7 +1199,7 @@ function createPlaylist(playlistName) {
                         top.appendChild(image);
                         top.appendChild(details);
                         top.appendChild(checkbox);
-                        top.setAttribute("data-id", value.ID);
+                        top.setAttribute("data-id", value.ID.toString());
                         playlistContainer.appendChild(top);
                     });
                 });
@@ -1234,55 +1212,18 @@ function createPlaylist(playlistName) {
         playlistInput.value = ""; // clear the input field
     });
 }
-function preloadSongs(trackIds) {
-    // Preload the audio track
-    if (trackIds == null || trackIds.length === 0) {
-        return;
-    }
-    try {
-        makeRequest(url + "/loadTracks", new URLSearchParams({
-            "id": trackIds.join(","),
-        }));
-    }
-    catch (_a) {
-        // This won't catch async errors from makeRequest
-        return;
-    }
-}
-function makeRequestForAudio(url_1, parameters_1) {
-    return __awaiter(this, arguments, void 0, function* (url, parameters, method = 'GET') {
-        // Build the query string
-        const query = new URLSearchParams(parameters).toString();
-        const fullUrl = `${url}?${query}`;
-        const token = localStorage.getItem("access_token");
-        try {
-            const response = yield fetch(fullUrl, {
-                method: method,
-                headers: {
-                    "Authorization": `Bearer ${token}`
-                }
-            });
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-            return response.blob(); // convert the response to a Blob
-        }
-        catch (error) {
-            console.trace("Fetch error:", error);
-            throw error;
-        }
-    });
+function getURLForAudio(url, id) {
+    // Build the query string
+    const paramsWithToken = { "id": id.toString(), token: localStorage.getItem("access_token") };
+    const query = new URLSearchParams(paramsWithToken).toString();
+    return `${url}?${query}`;
 }
 function loadAudio(trackId, audioElement) {
-    makeRequestForAudio(url + "/play", {
-        "id": trackId,
-        "download": true,
-    }).then(blob => {
-        const audioURL = URL.createObjectURL(blob); // create a blob URL
-        audioElement.src = audioURL; // set the audio element's source to the blob URL
-    }).catch(err => {
-        console.error("Failed to load audio:", err);
-    });
+    const audioURL = getURLForAudio(url + "/play", trackId);
+    audioElement.src = audioURL; // set the audio element's source to the URL
+}
+function preloadAudio(trackId) {
+    makeRequest(url + "/preload", new URLSearchParams({ "id": trackId.toString() }), 'POST');
 }
 function shuffleArray(array) {
     let currentIndex = array.length;
@@ -1387,7 +1328,7 @@ function play(override = null) {
 }
 function playPlaylist(playlistId = null, itemToPlay = null, shuffle = false) {
     if (playlistId == null) {
-        playlistId = document.getElementById("playlist-tab").getAttribute("data-id");
+        playlistId = parseInt(document.getElementById("playlist-tab").getAttribute("data-id"));
     }
     let playlist = userPlaylists.get(playlistId);
     if (playlist == null) {
@@ -1419,15 +1360,9 @@ function playQueue() {
         return;
     }
     let trackId = queue[queueIndex];
-    // preload 4 next songs
-    if (queueIndex + 4 >= queue.length) {
-        if (queueIndex + 1 < queue.length) {
-            preloadSongs(queue.slice(queueIndex + 1, queue.length));
-        }
-    }
-    else {
-        preloadSongs(queue.slice(queueIndex + 1, queueIndex + 4));
-    }
+    // preload next 2 songs:
+    preloadAudio(queue[queueIndex + 1 >= queue.length ? 0 : queueIndex + 1]);
+    preloadAudio(queue[queueIndex + 2 >= queue.length ? (queueIndex + 2) % queue.length : queueIndex + 2]);
     playSong(trackId);
 }
 function formatTime(seconds) {
@@ -1451,7 +1386,7 @@ function playSongInQueue(trackId) {
     playQueue();
 }
 function playAlbum() {
-    let albumId = document.getElementById("album-tab").getAttribute("data-id");
+    let albumId = parseInt(document.getElementById("album-tab").getAttribute("data-id"));
     getAlbumTracks(albumId).then(function (tracks) {
         let trackIds = tracks.map(track => track.ID);
         if (trackIds.length == 0) {
@@ -1469,7 +1404,7 @@ function playAlbum() {
 }
 function playSongInAlbum(trackId, albumId) {
     if (albumId == null) {
-        albumId = document.getElementById("album-tab").getAttribute("data-id");
+        albumId = parseInt(document.getElementById("album-tab").getAttribute("data-id"));
     }
     if (albumId == null) {
         return;
@@ -1494,7 +1429,7 @@ function playSongInAlbum(trackId, albumId) {
 }
 function playSongInPlaylist(playlistId, trackId) {
     if (playlistId == null) {
-        playlistId = document.getElementById("playlist-tab").getAttribute("data-id");
+        playlistId = parseInt(document.getElementById("playlist-tab").getAttribute("data-id"));
     }
     let playlist = userPlaylists.get(playlistId);
     if (playlist == null) {
@@ -1533,7 +1468,7 @@ function playSong(trackId) {
 }
 function playArtist(artistId) {
     if (artistId == null) {
-        artistId = document.getElementById("artist-tab").getAttribute("data-id");
+        artistId = parseInt(document.getElementById("artist-tab").getAttribute("data-id"));
     }
     // get all tracks 
     getArtistAlbums(artistId).then(function (albums) {
@@ -1569,7 +1504,7 @@ function setCurrentlyPlayingInDevice(track) {
         track.ArtistsNames.push("Unknown Artist");
     }
     if ('mediaSession' in navigator) {
-        const imageUrl = (track.Image && track.Image.trim()) ? track.Image : (track.SmallImage && track.SmallImage.trim()) ? track.SmallImage : testImage;
+        const imageUrl = getImageURL(track.Image, "640x640") || testImage;
         navigator.mediaSession.metadata = new MediaMetadata({
             title: track.Title,
             artist: track.ArtistsNames.join(", "),
@@ -1603,7 +1538,7 @@ const updateDuration = function () {
     playerSeekRange.max = Math.ceil(currentAudio.duration).toString();
     playerDuration.textContent = getTimecode(Number(playerSeekRange.max));
 };
-const playerRunningTime = document.querySelector("[data-running-time");
+const playerRunningTime = document.querySelector("[data-running-time]");
 const updateRunningTime = function () {
     playerSeekRange.valueAsNumber = currentAudio.currentTime;
     playerRunningTime.textContent = getTimecode(currentAudio.currentTime);
